@@ -629,12 +629,16 @@ if st.session_state.get('backtest_results') and isinstance(st.session_state.back
                     perf_data.append({
                         '股票代码': stock,
                         '交易次数': stats['trades'],
-                        '总盈亏': f"¥{stats['total_pnl']:.2f}",
-                        '胜率': f"{stats['win_trades']/stats['trades']*100:.1f}%"
+                        '总盈亏': stats['total_pnl'],  # Keep as numeric for sorting
+                        '胜率': stats['win_trades']/stats['trades']*100
                     })
                 
                 perf_df = pd.DataFrame(perf_data)
                 perf_df = perf_df.sort_values('总盈亏', ascending=False)
+                
+                # Format for display after sorting
+                perf_df['总盈亏'] = perf_df['总盈亏'].apply(lambda x: f"¥{x:.2f}")
+                perf_df['胜率'] = perf_df['胜率'].apply(lambda x: f"{x:.1f}%")
                 
                 st.markdown("#### 个股表现")
                 st.dataframe(perf_df, use_container_width=True)
