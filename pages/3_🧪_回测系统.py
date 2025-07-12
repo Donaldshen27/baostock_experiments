@@ -31,6 +31,10 @@ if 'backtest_results' not in st.session_state:
 if 'strategies' not in st.session_state:
     st.session_state.strategies = {}
 
+# Ensure backtest_results is always a dict
+if st.session_state.backtest_results is None:
+    st.session_state.backtest_results = {}
+
 # Header
 st.title("🧪 策略回测系统")
 st.markdown("测试您的策略在历史数据上的表现")
@@ -289,8 +293,12 @@ if run_backtest:
         # Store result
         backtest_id = f"{strategy_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Ensure backtest_results exists
-        if 'backtest_results' not in st.session_state:
+        # Ensure backtest_results exists and is a dict
+        if 'backtest_results' not in st.session_state or st.session_state.backtest_results is None:
+            st.session_state.backtest_results = {}
+        
+        # Double-check it's a dict before assignment
+        if not isinstance(st.session_state.backtest_results, dict):
             st.session_state.backtest_results = {}
             
         st.session_state.backtest_results[backtest_id] = result
@@ -298,7 +306,7 @@ if run_backtest:
         st.success("回测完成!")
 
 # Display results
-if st.session_state.backtest_results:
+if st.session_state.get('backtest_results') and isinstance(st.session_state.backtest_results, dict) and len(st.session_state.backtest_results) > 0:
     # Select which result to display
     if len(st.session_state.backtest_results) > 1:
         result_id = st.selectbox(
