@@ -1,0 +1,15 @@
+# Core dependencies
+streamlit>=1.32.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.18.0
+
+# Data source
+baostock>=0.8.8
+
+# Visualization
+matplotlib>=3.7.0
+
+# Optional dependencies for enhanced features
+# scikit-learn>=1.3.0  # For future ML features
+# ta-lib>=0.4.25      # For additional technical indicators
