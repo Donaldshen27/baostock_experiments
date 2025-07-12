@@ -93,10 +93,47 @@ with st.sidebar:
             "选择指数",
             ["沪深300", "上证50", "中证500"]
         )
-        # In real implementation, fetch from data manager
-        # For now, use sample stocks
-        stock_codes = ["sh.600000", "sz.000002", "sh.600519"]
-        st.info(f"将使用{index}成份股进行回测")
+        
+        # Map Chinese names to index codes
+        index_map = {
+            "沪深300": "hs300",
+            "上证50": "sz50",
+            "中证500": "zz500"
+        }
+        
+        # Option to limit number of stocks for performance
+        with st.expander("指数成份股设置", expanded=True):
+            use_all_components = st.checkbox("使用全部成份股", value=False)
+            
+            if not use_all_components:
+                max_stocks = st.slider(
+                    "最大股票数量",
+                    min_value=5,
+                    max_value=50,
+                    value=20,
+                    help="限制股票数量可以提高回测速度"
+                )
+            else:
+                max_stocks = None
+        
+        # Fetch index components from data manager
+        try:
+            index_components = dm.get_index_components(index_map[index])
+            if not index_components.empty:
+                stock_codes = index_components['code'].tolist()
+                
+                # Limit number of stocks if requested
+                if max_stocks and len(stock_codes) > max_stocks:
+                    stock_codes = stock_codes[:max_stocks]
+                    st.info(f"将使用{index}的前{max_stocks}只成份股进行回测（共{len(index_components)}只）")
+                else:
+                    st.info(f"将使用{index}的全部{len(stock_codes)}只成份股进行回测")
+            else:
+                st.warning(f"无法获取{index}成份股，使用默认股票")
+                stock_codes = ["sh.600000", "sz.000002", "sh.600519"]
+        except Exception as e:
+            st.error(f"获取指数成份股失败: {e}")
+            stock_codes = ["sh.600000", "sz.000002", "sh.600519"]
         
     else:
         custom_codes = st.text_area(

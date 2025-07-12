@@ -17,6 +17,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from core.data_manager import DataManager
 from core.indicators import TechnicalIndicators
+from core.chip_distribution import ChipDistribution
 
 st.set_page_config(page_title="市场总览", page_icon="📊", layout="wide")
 
@@ -382,6 +383,235 @@ with ind_tab3:
         )
         fig_atr.update_layout(height=300, title="Average True Range (14)")
         st.plotly_chart(fig_atr, use_container_width=True)
+
+# Chip Distribution Section
+st.markdown("### 🎯 筹码分布")
+
+# Traditional Chip Distribution Histogram (筹码峰)
+st.markdown("#### 📊 筹码分布图")
+
+# Calculate chip distribution using historical data
+current_price = float(df['close'].iloc[-1])
+chip_dist_df = ChipDistribution.calculate_chip_distribution(
+    df.reset_index(), 
+    current_price,
+    lookback_days=min(120, len(df)),
+    price_bins=80
+)
+
+# Create the traditional chip distribution histogram
+fig_chip_hist = go.Figure()
+
+# Add trapped chips (blue - 套牢筹码)
+fig_chip_hist.add_trace(
+    go.Bar(
+        x=chip_dist_df['trapped_chips_pct'],
+        y=chip_dist_df['price'],
+        orientation='h',
+        name='套牢筹码',
+        marker_color='lightblue',
+        width=1.5,
+        hovertemplate='价格: %{y:.2f}<br>筹码: %{x:.2f}%<extra></extra>'
+    )
+)
+
+# Add profit chips (red - 获利筹码)
+fig_chip_hist.add_trace(
+    go.Bar(
+        x=chip_dist_df['profit_chips_pct'],
+        y=chip_dist_df['price'],
+        orientation='h',
+        name='获利筹码',
+        marker_color='lightcoral',
+        width=1.5,
+        hovertemplate='价格: %{y:.2f}<br>筹码: %{x:.2f}%<extra></extra>'
+    )
+)
+
+# Calculate and add average cost line
+chip_stats = ChipDistribution.calculate_cost_distribution_stats(chip_dist_df)
+avg_cost = chip_stats['avg_cost']
+
+# Add average cost line (yellow)
+fig_chip_hist.add_hline(
+    y=avg_cost,
+    line_dash="dash",
+    line_color="gold",
+    line_width=2,
+    annotation_text=f"平均成本: {avg_cost:.2f}",
+    annotation_position="right"
+)
+
+# Add current price line (green)
+fig_chip_hist.add_hline(
+    y=current_price,
+    line_dash="solid",
+    line_color="green",
+    line_width=2,
+    annotation_text=f"当前价: {current_price:.2f}",
+    annotation_position="right"
+)
+
+# Update layout
+fig_chip_hist.update_layout(
+    title="筹码分布直方图",
+    xaxis_title="筹码占比 (%)",
+    yaxis_title="价格 (元)",
+    height=500,
+    barmode='overlay',
+    showlegend=True,
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1
+    ),
+    xaxis=dict(range=[0, max(chip_dist_df['chips_pct'].max() * 1.2, 5)]),
+    yaxis=dict(
+        range=[chip_dist_df['price'].min() * 0.98, chip_dist_df['price'].max() * 1.02]
+    )
+)
+
+st.plotly_chart(fig_chip_hist, use_container_width=True)
+
+# Display chip distribution statistics
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("获利筹码", f"{chip_stats['profit_ratio']:.1f}%", 
+              delta=f"{chip_stats['profit_ratio']-50:.1f}%" if chip_stats['profit_ratio'] > 50 else None)
+with col2:
+    st.metric("套牢筹码", f"{chip_stats['trapped_ratio']:.1f}%")
+with col3:
+    st.metric("平均成本", f"¥{chip_stats['avg_cost']:.2f}",
+              delta=f"{(current_price/chip_stats['avg_cost']-1)*100:.1f}%")
+with col4:
+    st.metric("90%集中度", f"{chip_stats['concentration_90']:.1f}%",
+              help="90%的筹码集中在的价格区间占比")
+
+# Get AkShare chip distribution data for additional analysis
+st.markdown("#### 📈 筹码分布趋势")
+chip_df = dm.get_chip_distribution(stock_code)
+
+if not chip_df.empty:
+    # Create two columns for chip distribution visualization
+    chip_col1, chip_col2 = st.columns(2)
+    
+    with chip_col1:
+        # Profit ratio and average cost chart
+        fig_chip = go.Figure()
+        
+        # Add profit ratio line
+        fig_chip.add_trace(
+            go.Scatter(
+                x=chip_df['日期'],
+                y=chip_df['获利比例'],
+                mode='lines',
+                name='获利比例 (%)',
+                line=dict(color='green', width=2),
+                yaxis='y'
+            )
+        )
+        
+        # Add average cost line
+        fig_chip.add_trace(
+            go.Scatter(
+                x=chip_df['日期'],
+                y=chip_df['平均成本'],
+                mode='lines',
+                name='平均成本',
+                line=dict(color='red', width=2),
+                yaxis='y2'
+            )
+        )
+        
+        fig_chip.update_layout(
+            title="获利比例与平均成本",
+            height=400,
+            yaxis=dict(
+                title="获利比例 (%)",
+                side="left",
+                showgrid=True
+            ),
+            yaxis2=dict(
+                title="平均成本 (元)",
+                side="right",
+                overlaying="y",
+                showgrid=False
+            ),
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_chip, use_container_width=True)
+    
+    with chip_col2:
+        # Concentration chart
+        fig_conc = go.Figure()
+        
+        # Add 90% concentration
+        fig_conc.add_trace(
+            go.Scatter(
+                x=chip_df['日期'],
+                y=chip_df['90集中度'],
+                mode='lines',
+                name='90%集中度',
+                line=dict(color='blue', width=2)
+            )
+        )
+        
+        # Add 70% concentration
+        fig_conc.add_trace(
+            go.Scatter(
+                x=chip_df['日期'],
+                y=chip_df['70集中度'],
+                mode='lines',
+                name='70%集中度',
+                line=dict(color='orange', width=2)
+            )
+        )
+        
+        fig_conc.update_layout(
+            title="筹码集中度",
+            height=400,
+            yaxis=dict(title="集中度 (%)"),
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_conc, use_container_width=True)
+    
+    # Cost distribution range
+    st.markdown("#### 📊 成本分布区间")
+    latest_chip = chip_df.iloc[-1]
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("70%成本区间", 
+                 f"{latest_chip['70成本-低']:.2f} - {latest_chip['70成本-高']:.2f}")
+    with col2:
+        st.metric("90%成本区间", 
+                 f"{latest_chip['90成本-低']:.2f} - {latest_chip['90成本-高']:.2f}")
+    with col3:
+        st.metric("当前获利比例", f"{latest_chip['获利比例']:.1f}%")
+    with col4:
+        st.metric("平均成本", f"{latest_chip['平均成本']:.2f}")
+    
+    # Chip distribution analysis
+    with st.expander("💡 筹码分布解读"):
+        st.markdown(f"""
+        **筹码分布分析 ({latest_chip['日期']})**
+        
+        - **获利比例**: {latest_chip['获利比例']:.1f}% 的持仓处于盈利状态
+        - **平均成本**: 市场平均持仓成本为 {latest_chip['平均成本']:.2f} 元
+        - **70%集中度**: {latest_chip['70集中度']:.1f}% - 表示70%的筹码集中在 {latest_chip['70成本-低']:.2f}-{latest_chip['70成本-高']:.2f} 元区间
+        - **90%集中度**: {latest_chip['90集中度']:.1f}% - 表示90%的筹码集中在 {latest_chip['90成本-低']:.2f}-{latest_chip['90成本-高']:.2f} 元区间
+        
+        **解读提示**:
+        - 集中度越小，说明筹码越集中，可能存在主力控盘
+        - 获利比例高时需注意获利回吐压力
+        - 平均成本可作为重要支撑/压力位参考
+        """)
+else:
+    st.info("暂无筹码分布数据，可能是因为该股票不支持或数据暂时不可用")
 
 # Data table
 with st.expander("📋 查看原始数据"):

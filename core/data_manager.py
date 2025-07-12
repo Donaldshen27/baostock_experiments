@@ -3,6 +3,7 @@
 """
 Data Manager Module
 Handles all data fetching, caching, and preprocessing
+Enhanced with AkShare integration for chip distribution and real-time data
 """
 
 import baostock as bs
@@ -14,6 +15,12 @@ import pickle
 from pathlib import Path
 import logging
 from typing import Optional, Dict, List, Tuple
+try:
+    import akshare as ak
+    AKSHARE_AVAILABLE = True
+except ImportError:
+    AKSHARE_AVAILABLE = False
+    logging.warning("AkShare not installed. Chip distribution features will be unavailable.")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -398,3 +405,156 @@ class DataManager:
                     })
         
         return pd.DataFrame(industry_stocks)
+    
+    # AkShare Integration Methods
+    def get_chip_distribution(self, stock_code: str, adjust: str = "") -> pd.DataFrame:
+        """
+        Get chip distribution data from AkShare
+        
+        Args:
+            stock_code: Stock code (e.g., 'sh.600519' or '600519')
+            adjust: Adjustment type (empty string for no adjustment)
+            
+        Returns:
+            DataFrame with chip distribution data
+        """
+        if not AKSHARE_AVAILABLE:
+            logger.warning("AkShare not available. Cannot fetch chip distribution.")
+            return pd.DataFrame()
+            
+        # Convert baostock format to akshare format
+        if '.' in stock_code:
+            code = stock_code.split('.')[1]
+        else:
+            code = stock_code
+            
+        try:
+            df = ak.stock_cyq_em(symbol=code, adjust=adjust)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting chip distribution for {stock_code}: {e}")
+            return pd.DataFrame()
+    
+    def get_stock_info_ak(self, stock_code: str) -> Dict:
+        """
+        Get comprehensive stock information including outstanding shares from AkShare
+        
+        Args:
+            stock_code: Stock code (e.g., 'sh.600519' or '600519')
+            
+        Returns:
+            Dictionary with stock information
+        """
+        if not AKSHARE_AVAILABLE:
+            logger.warning("AkShare not available. Cannot fetch stock info.")
+            return {}
+            
+        # Convert format
+        if '.' in stock_code:
+            code = stock_code.split('.')[1]
+        else:
+            code = stock_code
+            
+        try:
+            df = ak.stock_individual_info_em(symbol=code)
+            # Convert to dictionary
+            info = {}
+            for _, row in df.iterrows():
+                info[row['item']] = row['value']
+            return info
+        except Exception as e:
+            logger.error(f"Error getting stock info for {stock_code}: {e}")
+            return {}
+    
+    def get_realtime_data(self, stock_code: str) -> Dict:
+        """
+        Get real-time stock data from AkShare
+        
+        Args:
+            stock_code: Stock code (e.g., 'sh.600519' or '600519')
+            
+        Returns:
+            Dictionary with real-time data
+        """
+        if not AKSHARE_AVAILABLE:
+            logger.warning("AkShare not available. Cannot fetch real-time data.")
+            return {}
+            
+        # Convert format
+        if '.' in stock_code:
+            code = stock_code.split('.')[1]
+        else:
+            code = stock_code
+            
+        try:
+            df = ak.stock_zh_a_spot_em()
+            stock_data = df[df['代码'] == code]
+            if not stock_data.empty:
+                return stock_data.iloc[0].to_dict()
+            return {}
+        except Exception as e:
+            logger.error(f"Error getting real-time data for {stock_code}: {e}")
+            return {}
+    
+    def get_stock_data_with_chip(self, 
+                                stock_code: str, 
+                                start_date: str, 
+                                end_date: str,
+                                frequency: str = 'd',
+                                adjustflag: str = '3') -> pd.DataFrame:
+        """
+        Get historical data from Baostock and merge with chip distribution from AkShare
+        
+        Args:
+            stock_code: Stock code (e.g., 'sh.600519')
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            frequency: Data frequency
+            adjustflag: Adjustment flag
+            
+        Returns:
+            DataFrame with price data and chip distribution metrics
+        """
+        # Get historical data from baostock
+        df = self.get_stock_data(stock_code, start_date, end_date, frequency, adjustflag)
+        
+        if df.empty:
+            return df
+            
+        # Get chip distribution data
+        chip_df = self.get_chip_distribution(stock_code)
+        
+        if not chip_df.empty:
+            # Merge chip distribution data
+            chip_df['date'] = pd.to_datetime(chip_df['日期']).dt.strftime('%Y-%m-%d')
+            chip_df = chip_df.rename(columns={
+                '获利比例': 'profit_ratio',
+                '平均成本': 'avg_cost',
+                '90成本-低': 'cost_90_low',
+                '90成本-高': 'cost_90_high',
+                '90集中度': 'concentration_90',
+                '70成本-低': 'cost_70_low',
+                '70成本-高': 'cost_70_high',
+                '70集中度': 'concentration_70'
+            })
+            
+            # Select relevant columns
+            chip_cols = ['date', 'profit_ratio', 'avg_cost', 'cost_90_low', 
+                        'cost_90_high', 'concentration_90', 'cost_70_low', 
+                        'cost_70_high', 'concentration_70']
+            chip_df = chip_df[chip_cols]
+            
+            # Convert date index back to column for merging
+            df_merge = df.reset_index()
+            df_merge['date'] = df_merge['date'].dt.strftime('%Y-%m-%d')
+            
+            # Merge with chip data
+            df_merge = pd.merge(df_merge, chip_df, on='date', how='left')
+            
+            # Set date back as index
+            df_merge['date'] = pd.to_datetime(df_merge['date'])
+            df_merge.set_index('date', inplace=True)
+            
+            return df_merge
+        
+        return df
