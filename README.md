@@ -13,6 +13,11 @@ This platform provides a complete solution for developing, testing, and analyzin
 - 30+ technical indicators (MA, RSI, MACD, Bollinger Bands, etc.)
 - Multi-timeframe analysis (5min to monthly)
 - Volume analysis and market breadth indicators
+- **NEW: Chip Distribution (筹码分布) Analysis**
+  - Traditional chip distribution histogram (筹码峰图)
+  - Profit/trapped chips visualization
+  - Average cost and concentration metrics
+  - Real-time chip flow analysis
 
 ### 📈 Strategy Builder
 - Visual strategy creation interface
@@ -48,7 +53,12 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 2. Install required packages:
 ```bash
-pip install baostock pandas matplotlib numpy
+pip install -r requirements.txt
+```
+
+Or install manually:
+```bash
+pip install baostock akshare pandas matplotlib numpy streamlit plotly
 ```
 
 ## 🚀 Quick Start
@@ -105,6 +115,11 @@ stock/
 - Data caching to reduce API calls
 - Batch data fetching for multiple stocks
 - Support for all Baostock data types
+- **Enhanced with AkShare integration:**
+  - Chip distribution data (`get_chip_distribution`)
+  - Stock info with outstanding shares (`get_stock_info_ak`)
+  - Real-time quotes (`get_realtime_data`)
+  - Combined historical + chip data (`get_stock_data_with_chip`)
 
 ### Strategy Framework (`strategies/base.py`)
 - Abstract base class for all strategies
@@ -124,12 +139,34 @@ stock/
 - Trading signal generation
 - Indicator combination support
 
+### Chip Distribution (`core/chip_distribution.py`)
+- Calculate chip distribution from historical data
+- Triangular distribution algorithm for realistic modeling
+- Decay factor based on turnover rate
+- Statistical analysis (concentration, profit ratio)
+- Support for custom lookback periods and price bins
+
+## Data Sources
+
+### Baostock
+- Historical price and volume data
+- Financial statements (profit, balance, cash flow)
+- Index components (HS300, SZ50, ZZ500)
+- Trading calendar
+
+### AkShare
+- Chip distribution metrics (筹码分布)
+- Real-time quotes and market data
+- Stock info with outstanding shares
+- Market breadth indicators
+
 ## Data Dimensions
 
 ### Market Data Fields
 - **Price**: open, high, low, close, volume, amount
 - **Metrics**: pctChg, turn, peTTM, pbMRQ, isST
 - **Timeframes**: 5min, 15min, 30min, 60min, daily, weekly, monthly
+- **Chip Distribution**: profit_ratio, avg_cost, concentration, cost ranges
 
 ### Financial Data Categories
 1. **Profitability**: ROE, profit margins, EPS
@@ -215,7 +252,9 @@ class MyStrategy(BaseStrategy):
 
 ## License
 
-This project uses the Baostock library which is available under BSD License.
+This project uses the following libraries:
+- Baostock - BSD License
+- AkShare - MIT License
 
 ## Contributing
 

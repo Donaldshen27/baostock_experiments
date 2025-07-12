@@ -6,6 +6,7 @@ plotly>=5.18.0
 
 # Data source
 baostock>=0.8.8
+akshare>=1.17.0
 
 # Visualization
 matplotlib>=3.7.0
